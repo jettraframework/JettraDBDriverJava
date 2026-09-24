@@ -6,7 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Represents a single aggregated row resulting from a JettraAggregation execution.
+ * Represents a single aggregated row resulting from a JettraAggregation
+ * execution.
  * Contains grouped keys, accumulator values (count, sum, avg, min, max),
  * and any dereferenced or looked-up entity data.
  */
@@ -52,9 +53,12 @@ public class AggregationRow {
     }
 
     public Object get(String field) {
-        if (values.containsKey(field)) return values.get(field);
-        if (groupKeys.containsKey(field)) return groupKeys.get(field);
-        if (enriched.containsKey(field)) return enriched.get(field);
+        if (values.containsKey(field))
+            return values.get(field);
+        if (groupKeys.containsKey(field))
+            return groupKeys.get(field);
+        if (enriched.containsKey(field))
+            return enriched.get(field);
         return null;
     }
 
@@ -139,4 +143,3 @@ public class AggregationRow {
         return toJsonObject().toString();
     }
 }
-

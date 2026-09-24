@@ -74,4 +74,3 @@ public class AggregationResult implements Iterable<AggregationRow> {
         return toJson();
     }
 }
-

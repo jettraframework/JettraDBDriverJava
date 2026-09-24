@@ -395,7 +395,6 @@ repo.delete("EMP-042");
 
 ---
 
-## 6. Referencias Cruzadas Directas (`JettraReference` - `jref://`)
 ---
 
 ## 6. Motores de Consultas Integrados en JettraDB y Conversión Directa a Java Records
@@ -626,9 +625,6 @@ JsonObject refJson = refEmpresa.toJsonObject(); // {"$jref": "jref://RECORDS:Exa
 String datosEmpresa = client.resolveRef(refEmpresa);
 System.out.println("Datos resueltos de la empresa: " + datosEmpresa);
 
-// 4. Resolución desde una URI en String
-String datosSucursal = client.resolveRef("jref://GEOSPATIAL:ExampleFactura/sucursal_3");
-System.out.println("Datos resueltos de la sucursal: " + datosSucursal);
 // 4. Resolución tipada directa a Java Record
 Optional<EmpresaRecord> empresaRec = client.resolveRef(refEmpresa, EmpresaRecord.class);
 empresaRec.ifPresent(e -> System.out.println("Empresa tipada: " + e.name()));
@@ -636,20 +632,14 @@ empresaRec.ifPresent(e -> System.out.println("Empresa tipada: " + e.name()));
 
 ---
 
-## 7. Caso de Estudio Completo: Base de Datos `ExampleFactura`
-## 7. Motor de Agregaciones y Agrupaciones (Aggregation & Grouping API)
 ## 8. Motor de Agregaciones y Agrupaciones (Aggregation & Grouping API)
 
-`JettraDB` incluye la base de datos de demostración empresarial **`ExampleFactura`**, la cual demuestra la interoperabilidad real entre los 9 motores:
 `JettraDBDriverJava` incorpora un potente motor nativo de agregación y agrupación fluida (`JettraAggregation`) diseñado para procesar consultas analíticas complejas directamente en memoria con latencia ultra-baja y paralelismo en Java 25.
 
-### 7.1 Arquitectura del Pipeline y Componentes
 ### 8.1 Arquitectura del Pipeline y Componentes
 
 El motor de agregación se compone de tres elementos principales:
 1. **`JettraAggregation`**: Constructor fluido del pipeline de agregación donde se configuran grupos, acumuladores, filtros y ordenamiento.
-2. **`AggregationResult`**: Conjunto de resultados iterable, indexable y serializable a JSON (`toJson()`, `toJsonArray()`).
-3. **`AggregationRow`**: Fila individual agregada que contiene las claves de agrupación (`_id`), los valores acumulados y los objetos enriquecidos vía referencias cruzadas.
 2. **`AggregationResult`**: Conjunto de resultados iterable, indexable, transformable a Records (`toRecordList(...)`) y serializable a JSON (`toJson()`, `toJsonArray()`).
 3. **`AggregationRow`**: Fila individual agregada que contiene las claves de agrupación (`_id`), los valores acumulados, los objetos enriquecidos vía referencias cruzadas y el método `toRecord(Record.class)`.
 
@@ -681,7 +671,6 @@ El motor de agregación se compone de tres elementos principales:
                          └──▶ toJson() / toJsonArray()         (Payloads JSON)
 ```
 
-### 7.2 Agrupaciones Simples, Compuestas y Campos Anidados
 ### 8.2 Agrupaciones Simples, Compuestas y Campos Anidados
 
 El método `groupBy(...)` admite una o múltiples claves, así como acceso a propiedades profundamente anidadas mediante **notación de punto (`dot.notation`)**:
@@ -710,7 +699,6 @@ JettraAggregation aggGlobal = client.aggregate("facturas")
         .avg("totalAmount", "ticketPromedioGlobal");
 ```
 
-### 7.3 Funciones de Acumulación Disponibles
 ### 8.3 Funciones de Acumulación Disponibles
 
 | Acumulador | Sobrecarga | Descripción |
@@ -721,7 +709,6 @@ JettraAggregation aggGlobal = client.aggregate("facturas")
 | **`min`** | `min(campo)`, `min(campo, alias)` | Determina el valor numérico mínimo del grupo. |
 | **`max`** | `max(campo)`, `max(campo, alias)` | Determina el valor numérico máximo del grupo. |
 
-### 7.4 Filtrado Previo (`filter`) y Filtrado Posterior (`having`)
 ### 8.4 Filtrado Previo (`filter`) y Filtrado Posterior (`having`)
 
 - **`filter(Predicate<JsonObject>)`**: Se ejecuta antes del agrupamiento, descartando documentos antes de entrar a la fase de acumulación (equivalente a `WHERE` en SQL o `$match` en MongoDB).
@@ -729,118 +716,33 @@ JettraAggregation aggGlobal = client.aggregate("facturas")
 
 ```java
 AggregationResult resultado = client.aggregate("invoices")
-        // Pre-filtro: solo facturas emitidas y confirmadas
         .filter(doc -> "ISSUED".equals(doc.get("status")))
         .groupBy("branchRef")
         .sum("totalAmount", "totalVentas")
         .count("cantidadFacturas")
-        // Post-filtro: solo sucursales con ventas mayores o iguales a $50,000
         .having(row -> row.getDouble("totalVentas") >= 50000.0)
         .sortByDesc("totalVentas")
         .execute();
 ```
 
-### 7.5 Ordenamiento (`sortBy`) y Paginación (`skip`, `limit`)
 ### 8.5 Enriquecimiento de Referencias Cruzadas (`lookup`)
 
-Los resultados agregados pueden ordenarse por cualquier clave de agrupación o alias de acumulación en orden ascendente o descendente:
 Cuando un grupo se basa en una clave que contiene un puntero `jref://`, la operación `.lookup(refField, targetAlias)` resuelve automáticamente el puntero en O(1) e incrusta el documento referenciado dentro de la fila agregada:
-
-```java
-AggregationResult top5Sucursales = client.aggregate("invoices")
-        .groupBy("branchRef")
-        .sum("totalAmount", "totalVentas")
-        .sortByDesc("totalVentas") // Orden descendente por alias acumulado
-        .skip(0)                   // Desplazamiento (offset)
-        .limit(5)                  // Máximo 5 registros
-        .execute();
-```
-
-### 7.6 Enriquecimiento de Referencias Cruzadas (`lookup`)
-
-Cuando un grupo se basa en una clave que contiene un puntero `jref://` (por ejemplo, `sellerRef` apuntando a `jref://RECORDS:ExampleFactura/seller_5` o `branchRef` a `jref://GEOSPATIAL:ExampleFactura/sucursal_1`), la operación `.lookup(refField, targetAlias)` resuelve automáticamente el puntero en O(1) e incrusta el documento referenciado dentro de la fila agregada:
 
 ```java
 AggregationResult ventasVendedores = client.aggregate("invoices")
         .groupBy("sellerRef")
         .sum("totalAmount", "ventasTotales")
         .count("totalTickets")
-        // Resuelve automáticamente el vendedor desde el motor RECORDS
         .lookup("sellerRef", "vendedor")
         .sortByDesc("ventasTotales")
         .execute();
-
-for (AggregationRow row : ventasVendedores) {
-    JsonObject vendedor = (JsonObject) row.get("vendedor");
-    System.out.printf("Vendedor: %s | Ventas: $%.2f | Tickets: %d%n",
-        vendedor != null ? vendedor.get("name") : row.getString("sellerRef"),
-        row.getDouble("ventasTotales"),
-        row.getLong("totalTickets"));
-}
-```
-
-### 7.7 Formas de Ejecución e Integración
-
-El pipeline de agregación puede invocarse desde múltiples puntos de entrada:
-
-#### Desde `JettraClient`:
-```java
-AggregationResult res1 = client.aggregate("invoices")
-        .groupBy("branchRef")
-        .sum("totalAmount")
-        .execute();
-```
-
-#### Desde `JettraFluentQuery`:
-```java
-AggregationResult res2 = client.document()
-        .collection("customers")
-        .aggregate()
-        .groupBy("city")
-        .count()
-        .execute();
-```
-
-#### Desde `JettraRepository`:
-```java
-JettraRepository<FacturaRecord> repo = client.recordRepository(FacturaRecord.class, "facturas");
-AggregationResult res3 = repo.aggregate()
-        .groupBy("branchRef")
-        .sum("totalAmount")
-        .execute(repo.findAll());
-```
-
-#### Sobre Colecciones y Listas en Memoria:
-```java
-List<String> jsonDocs = ...;
-AggregationResult res4 = JettraAggregation.from(jsonDocs)
-        .groupBy("categoria")
-        .count()
-        .execute(jsonDocs);
-```
-
-### 7.8 Acceso a Datos y Serialización JSON
-
-`AggregationRow` proporciona métodos tipados de lectura rápida:
-- `getString(alias)`
-- `getDouble(alias)`
-- `getLong(alias)`
-- `getInt(alias)`
-- `get(alias)`
-- `toJsonObject()`: Genera una estructura JSON estándar con `_id` conteniendo las claves de grupo y los valores agregados.
-
-`AggregationResult` permite exportar directamente el conjunto completo a JSON:
-```java
-String jsonString = result.toJson();
-JsonArray jsonArray = result.toJsonArray();
 ```
 
 ---
 
-## 8. Caso de Estudio Completo: Base de Datos Multi-Modelo `ExampleFactura`
 ## 9. Caso de Estudio Completo: Base de Datos Multi-Modelo `ExampleFactura`
 
-`JettraDB` incluye la base de datos de demostración empresarial **`ExampleFactura`**, la cual demuestra la interoperabilidad real entre los 9 motores de almacenamiento y el uso intensivo del motor de agregaciones y referencias:
 `JettraDB` incluye la base de datos de demostración empresarial **`ExampleFactura`**, la cual demuestra la interoperabilidad real entre los 9 motores de almacenamiento, las consultas políglotas y la **conversión directa a Java 25 Records**:
 
 ```text
@@ -858,19 +760,13 @@ JsonArray jsonArray = result.toJsonArray();
  └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-A continuación se muestra un programa Java completo que demuestra cómo interactuar con `ExampleFactura` desde el driver:
-A continuación se muestra un programa Java completo que demuestra cómo interactuar con `ExampleFactura` combinando operaciones CRUD, resolución de referencias cruzadas y **agregaciones avanzadas con agrupación**:
 A continuación se muestra un programa Java completo que demuestra cómo interactuar con `ExampleFactura` combinando operaciones CRUD, resolución de referencias cruzadas, agregaciones avanzadas y **conversión tipada a Java Records**:
 
 ```java
-import com.jettra.driver.java.JettraClient;
-import com.jettra.driver.java.JettraReference;
 import com.jettra.driver.java.*;
 import io.jettra.json.JettraJson;
 import io.jettra.json.JsonObject;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.Optional;
 
 public class ExampleFacturaDemo {
@@ -943,51 +839,23 @@ public class ExampleFacturaDemo {
         client.connect();
         client.login("admin", "admin");
 
-        JettraJson json = new JettraJson();
         String db = "ExampleFactura";
 
         System.out.println("================================================================");
-        System.out.println("   JettraDBDriverJava - Suite de Demostración: ExampleFactura   ");
         System.out.println("   JettraDBDriverJava - Suite Completa: ExampleFactura         ");
         System.out.println("================================================================\n");
 
         // -------------------------------------------------------------
-        // CASO 1: Inspeccionar Factura en Motor COLUMN y Resolver Referencias
         // CASO 1: Consulta de Factura en COLUMN y Conversión a Record
         // -------------------------------------------------------------
-        System.out.println("=== 1. Inspeccionar Factura en Motor COLUMN ===");
-        // Obtenemos la factura fac_1 almacenada en el motor columnar
         System.out.println("=== 1. Consultar Factura y Convertir a FacturaModel (Record) ===");
         String facRaw = client.getColumnRow(db, "fac_1");
-        JsonObject factura = json.fromJson(facRaw, JsonObject.class);
-        System.out.println("Factura Número: " + factura.get("invoiceNumber"));
-        System.out.println("Total: $" + factura.get("totalAmount"));
-        System.out.println("Subtotal:       $" + factura.get("subtotal"));
-        System.out.println("Impuesto (7%):  $" + factura.get("taxAmount"));
-        System.out.println("Total:          $" + factura.get("totalAmount"));
         FacturaModel factura = client.toRecord(facRaw, FacturaModel.class);
 
-        System.out.println("\n=== 2. Resolver Referencias Cruzadas de la Factura ===");
-        // La factura contiene referencias a otros motores:
-        System.out.println("\n=== 2. Resolución de Punteros Directos jref:// en O(1) ===");
-        String customerRef = (String) factura.get("customerRef"); // jref://DOCUMENT:ExampleFactura/cust_1
-        String sellerRef = (String) factura.get("sellerRef");     // jref://RECORDS:ExampleFactura/seller_1
-        String branchRef = (String) factura.get("branchRef");     // jref://GEOSPATIAL:ExampleFactura/sucursal_1
-        String pdfRef = (String) factura.get("pdfDocumentRef");   // jref://OBJECT:ExampleFactura/fac_1.pdf
-        String sellerRef   = (String) factura.get("sellerRef");   // jref://RECORDS:ExampleFactura/seller_1
-        String branchRef   = (String) factura.get("branchRef");   // jref://GEOSPATIAL:ExampleFactura/sucursal_1
-        String pdfRef      = (String) factura.get("pdfDocumentRef"); // jref://OBJECT:ExampleFactura/fac_1.pdf
         System.out.printf("Factura: %s | Fiscal: %s%n", factura.invoiceNumber(), factura.fiscalDocNumber());
         System.out.printf("Subtotal: $%.2f | Impuesto: $%.2f | Total: $%.2f%n",
             factura.subtotal(), factura.taxAmount(), factura.totalAmount());
 
-        // Resolución directa O(1) de cada entidad en su motor respectivo:
-        JsonObject cliente = json.fromJson(client.resolveRef(customerRef), JsonObject.class);
-        JsonObject cliente  = json.fromJson(client.resolveRef(customerRef), JsonObject.class);
-        JsonObject vendedor = json.fromJson(client.resolveRef(sellerRef), JsonObject.class);
-        JsonObject sucursal = json.fromJson(client.resolveRef(branchRef), JsonObject.class);
-        JsonObject pdfDoc = json.fromJson(client.resolveRef(pdfRef), JsonObject.class);
-        JsonObject pdfDoc   = json.fromJson(client.resolveRef(pdfRef), JsonObject.class);
         // -------------------------------------------------------------
         // CASO 2: Resolución O(1) de Referencias Directas a Records Tipados
         // -------------------------------------------------------------
@@ -996,15 +864,6 @@ public class ExampleFacturaDemo {
         Optional<VendedorModel> vendedor = client.resolveRef(factura.sellerRef(), VendedorModel.class);
         Optional<SucursalModel> sucursal = client.resolveRef(factura.branchRef(), SucursalModel.class);
 
-        System.out.println("• Cliente (DOCUMENT):  " + cliente.get("name") + " (" + cliente.get("city") + ")");
-        System.out.println("• Vendedor (RECORDS):  " + vendedor.get("name") + " (Comisión: " + vendedor.get("commissionPercent") + "%)");
-        System.out.printf("• Sucursal (GEOSPATIAL): %s [GPS: %s, %s]%n",
-        System.out.println("• Cliente (DOCUMENT):     " + cliente.get("name") + " (" + cliente.get("city") + ")");
-        System.out.println("• Vendedor (RECORDS):     " + vendedor.get("name") + " (Comisión: " + vendedor.get("commissionPercent") + "%)");
-        System.out.printf("• Sucursal (GEOSPATIAL):   %s [GPS: %s, %s]%n",
-            sucursal.get("name"), sucursal.get("lat"), sucursal.get("lon"));
-        System.out.println("• Archivo PDF (OBJECT): " + pdfDoc.get("fileName") + " (" + pdfDoc.get("sizeBytes") + " bytes)");
-        System.out.println("• Archivo PDF (OBJECT):    " + pdfDoc.get("fileName") + " (" + pdfDoc.get("sizeBytes") + " bytes)");
         cliente.ifPresent(c -> 
             System.out.printf("• Cliente (DOCUMENT):   %s | Ciudad: %s | Límite: $%.2f%n",
                 c.name(), c.city(), c.creditLimit()));
@@ -1015,18 +874,9 @@ public class ExampleFacturaDemo {
             System.out.printf("• Sucursal (GEOSPATIAL): %s | GPS: [%.4f, %.4f] | Dir: %s%n",
                 s.name(), s.lat(), s.lon(), s.address()));
 
-        System.out.println("\n=== 3. Consultar Stock de Inventario en TIMESERIES ===");
-        // Consultar métrica de existencias de inventario
-        String invRaw = client.getTimeSeries(db, 1788000000000L); // timestamp de la métrica
-        if (invRaw != null) {
-            JsonObject inv = json.fromJson(invRaw, JsonObject.class);
-            System.out.println("Stock disponible: " + inv.get("quantityOnHand") + " unidades");
         // -------------------------------------------------------------
-        // CASO 2: Agrupación y Agregación de Facturas por Sucursal
         // CASO 3: Agregación de Facturas por Sucursal a Java Records
         // -------------------------------------------------------------
-        System.out.println("\n=== 3. Agregación: Ventas, Ticket Promedio y Min/Max por Sucursal ===");
-        // Supongamos un lote de facturas recuperadas del motor COLUMN
         System.out.println("\n=== 3. Agregación Analítica de Facturas y Mapeo a VentasPorSucursalRecord ===");
         List<String> facturasLote = List.of(
             "{\"branchRef\":\"jref://GEOSPATIAL:ExampleFactura/sucursal_1\",\"totalAmount\":1250.00,\"status\":\"ISSUED\"}",
@@ -1037,7 +887,6 @@ public class ExampleFacturaDemo {
             "{\"branchRef\":\"jref://GEOSPATIAL:ExampleFactura/sucursal_3\",\"totalAmount\":450.00,\"status\":\"ISSUED\"}"
         );
 
-        AggregationResult reporteSucursales = client.aggregate(facturasLote)
         List<VentasPorSucursalRecord> ventasSucursales = client.aggregate(facturasLote)
                 .groupBy("branchRef")
                 .count("cantidadFacturas")
@@ -1045,21 +894,10 @@ public class ExampleFacturaDemo {
                 .avg("totalAmount", "ticketPromedio")
                 .min("totalAmount", "ventaMinima")
                 .max("totalAmount", "ventaMaxima")
-                .lookup("branchRef", "infoSucursal")
                 .sortByDesc("ventasTotales")
-                .execute(facturasLote);
                 .execute(facturasLote)
                 .toRecordList(VentasPorSucursalRecord.class);
 
-        for (AggregationRow fila : reporteSucursales) {
-            JsonObject sucInfo = (JsonObject) fila.get("infoSucursal");
-            String nombreSucursal = sucInfo != null ? (String) sucInfo.get("name") : fila.getString("branchRef");
-            System.out.printf("Sucursal: %s%n", nombreSucursal);
-            System.out.printf("  • Cantidad Facturas: %d%n", fila.getLong("cantidadFacturas"));
-            System.out.printf("  • Facturación Total: $%.2f%n", fila.getDouble("ventasTotales"));
-            System.out.printf("  • Ticket Promedio:   $%.2f%n", fila.getDouble("ticketPromedio"));
-            System.out.printf("  • Rango (Min - Max): $%.2f - $%.2f%n%n",
-                fila.getDouble("ventaMinima"), fila.getDouble("ventaMaxima"));
         for (VentasPorSucursalRecord v : ventasSucursales) {
             System.out.printf("Sucursal: %s%n", v.branchRef());
             System.out.printf("  • Cantidad de Facturas: %d%n", v.cantidadFacturas());
@@ -1068,71 +906,9 @@ public class ExampleFacturaDemo {
             System.out.printf("  • Rango (Mín - Máx):    $%.2f - $%.2f%n%n", v.ventaMinima(), v.ventaMaxima());
         }
 
-        System.out.println("\n=== 4. Crear Nueva Factura Comercial con Referencias ===");
-        JsonObject nuevaFactura = new JsonObject();
-        nuevaFactura.addProperty("columnFamily", "invoices");
-        nuevaFactura.addProperty("invoiceNumber", "FAC-2026-999999");
-        nuevaFactura.addProperty("customerRef", JettraReference.of("DOCUMENT", db, "cust_1").toUri());
-        nuevaFactura.addProperty("sellerRef", JettraReference.of("RECORDS", db, "seller_1").toUri());
-        nuevaFactura.addProperty("branchRef", JettraReference.of("GEOSPATIAL", db, "sucursal_1").toUri());
-        nuevaFactura.addProperty("subtotal", 500.00);
-        nuevaFactura.addProperty("taxAmount", 35.00);
-        nuevaFactura.addProperty("totalAmount", 535.00);
-        nuevaFactura.addProperty("status", "ISSUED");
         // -------------------------------------------------------------
-        // CASO 3: Agrupación de Clientes por Ciudad y Tipo con HAVING
         // CASO 4: Agregación Global de Métricas de Inventario a Record
         // -------------------------------------------------------------
-        System.out.println("=== 4. Agregación: Segmentación de Clientes por Ciudad con HAVING ===");
-        List<String> clientesLote = List.of(
-            "{\"city\":\"Panamá\",\"customerType\":\"CORPORATE\",\"creditLimit\":50000.0,\"status\":\"ACTIVE\"}",
-            "{\"city\":\"Panamá\",\"customerType\":\"CORPORATE\",\"creditLimit\":75000.0,\"status\":\"ACTIVE\"}",
-            "{\"city\":\"Panamá\",\"customerType\":\"SMB\",\"creditLimit\":15000.0,\"status\":\"ACTIVE\"}",
-            "{\"city\":\"David\",\"customerType\":\"CORPORATE\",\"creditLimit\":40000.0,\"status\":\"ACTIVE\"}",
-            "{\"city\":\"David\",\"customerType\":\"RETAIL\",\"creditLimit\":5000.0,\"status\":\"ACTIVE\"}",
-            "{\"city\":\"Colón\",\"customerType\":\"CORPORATE\",\"creditLimit\":60000.0,\"status\":\"ACTIVE\"}"
-        );
-
-        client.insertColumnRow(db, "fac_999999", nuevaFactura);
-        System.out.println("✓ Factura fac_999999 insertada con éxito.");
-        AggregationResult clientesPorCiudad = client.aggregate(clientesLote)
-                .filter(doc -> "ACTIVE".equals(doc.get("status")))
-                .groupBy("city", "customerType")
-                .count("totalClientes")
-                .avg("creditLimit", "creditoPromedio")
-                // Filtro HAVING: solo segmentos con crédito promedio superior a $20,000
-                .having(row -> row.getDouble("creditoPromedio") >= 20000.0)
-                .sortByDesc("creditoPromedio")
-                .execute(clientesLote);
-
-        System.out.println("\n=== 5. Búsqueda y Agrupación en Memoria con Java Streams ===");
-        // Listar todos los clientes de ExampleFactura y agruparlos por ciudad
-        List<String> rawClientes = client.listDocuments("cust"); // prefijo o colección
-        if (!rawClientes.isEmpty()) {
-            Map<String, Long> clientesPorCiudad = rawClientes.stream()
-                .map(str -> json.fromJson(str, JsonObject.class))
-                .filter(obj -> obj != null && obj.has("city"))
-                .collect(Collectors.groupingBy(
-                    obj -> (String) obj.get("city"),
-                    Collectors.counting()
-                ));
-
-            System.out.println("Distribución de Clientes por Ciudad:");
-            clientesPorCiudad.forEach((ciudad, cantidad) -> 
-                System.out.printf("  - %s: %d clientes%n", ciudad, cantidad)
-            );
-        for (AggregationRow row : clientesPorCiudad) {
-            System.out.printf("Ciudad: %-8s | Tipo: %-10s | Clientes: %d | Crédito Promedio: $%.2f%n",
-                row.getString("city"),
-                row.getString("customerType"),
-                row.getLong("totalClientes"),
-                row.getDouble("creditoPromedio"));
-        }
-
-        // -------------------------------------------------------------
-        // CASO 4: Agregación Global de Métricas de Inventario (TIMESERIES)
-        // -------------------------------------------------------------
-        System.out.println("\n=== 5. Agregación Global: Balance Total de Existencias ===");
         System.out.println("=== 4. Agregación Global de Inventario a BalanceInventarioGlobal ===");
         List<String> inventarioMetricas = List.of(
             "{\"invId\":\"inv_metric_1\",\"quantityOnHand\":450,\"branchRef\":\"sucursal_1\"}",
@@ -1141,28 +917,18 @@ public class ExampleFacturaDemo {
             "{\"invId\":\"inv_metric_4\",\"quantityOnHand\":150,\"branchRef\":\"sucursal_3\"}"
         );
 
-        AggregationResult totalInventario = client.aggregate(inventarioMetricas)
         Optional<BalanceInventarioGlobal> balanceOpt = client.aggregate(inventarioMetricas)
                 .count("totalLineas")
                 .sum("quantityOnHand", "existenciasTotales")
                 .avg("quantityOnHand", "promedioPorProducto")
-                .execute(inventarioMetricas);
                 .execute(inventarioMetricas)
                 .getFirstAsRecord(BalanceInventarioGlobal.class);
 
-        AggregationRow globalRow = totalInventario.getFirst().orElseThrow();
-        System.out.printf("Líneas de Inventario Auditadas: %d%n", globalRow.getLong("totalLineas"));
-        System.out.printf("Existencias Totales en Almacén: %d unidades%n", globalRow.getLong("existenciasTotales"));
-        System.out.printf("Promedio de Unidades por Ítem:  %.2f unidades%n", globalRow.getDouble("promedioPorProducto"));
         balanceOpt.ifPresent(b -> {
             System.out.printf("Líneas de Inventario Auditadas: %d%n", b.totalLineas());
             System.out.printf("Existencias Totales en Almacén: %d unidades%n", b.existenciasTotales());
             System.out.printf("Promedio de Unidades por Ítem:  %.2f unidades%n", b.promedioPorProducto());
         });
-
-        // Exportación de resultados a JSON
-        System.out.println("\nJSON de Salida de Agregación:");
-        System.out.println(totalInventario.toJson());
 
         client.close();
     }
@@ -1171,12 +937,8 @@ public class ExampleFacturaDemo {
 
 ---
 
-## 8. Copias de Seguridad y Diagnóstico del Sistema
-## 9. Copias de Seguridad y Diagnóstico del Sistema
 ## 10. Copias de Seguridad y Diagnóstico del Sistema
 
-### 8.1 Ejecución de Backup Snapshot con Metadatos
-### 9.1 Ejecución de Backup Snapshot con Metadatos
 ### 10.1 Ejecución de Backup Snapshot con Metadatos
 
 ```java
@@ -1195,8 +957,6 @@ if (resultado.success()) {
 }
 ```
 
-### 8.2 Métricas de Salud del Nodo
-### 9.2 Métricas de Salud del Nodo
 ### 10.2 Métricas de Salud del Nodo
 
 ```java
@@ -1206,11 +966,8 @@ System.out.println("Estado de hardware y red del nodo JettraDB:\n" + statusJson)
 
 ---
 
-## 9. Resumen de Métodos Principales de `JettraClient`
-## 10. Resumen de Métodos Principales de `JettraClient` y la API de Agregación
 ## 11. Resumen de Métodos Principales de `JettraClient`, `JettraRecordMapper` y la API de Agregación
 
-### 10.1 Métodos de `JettraClient`
 ### 11.1 Métodos de `JettraClient`
 
 | Categoría | Método | Descripción |
@@ -1229,11 +986,6 @@ System.out.println("Estado de hardware y red del nodo JettraDB:\n" + statusJson)
 | | `deleteDocument(col, id)`| Elimina el documento especificado. |
 | | `getDocumentHistoryVersions(...)` | Obtiene el historial de versiones MVCC tipado. |
 | | `restoreDocumentVersion(...)` | Restaura el documento a un timestamp anterior. |
-| **Records** | `saveRecord(col, id, rec)` | Guarda un Java Record con esquema automático. |
-| | `getRecord(col, id, class)` | Recupera un Java Record tipado. |
-| | `getRecord(col, id, fields, class)` | Recupera un Java Record con proyección selectiva. |
-| | `getRecordFields(col, id, fields)` | Retorna un `JsonObject` con las propiedades proyectadas. |
-| | `deleteRecord(col, id)` | Elimina el registro del motor RECORDS. |
 | **Java Records** | `getRecord(col, id, class)` | Recupera un Java Record tipado. |
 | | `getRecord(col, id, fields, class)` | Recupera un Java Record con proyección selectiva (`?fields=...`). |
 | | `listRecords(col, class)` | Lista documentos convirtiéndolos directamente a `List<R>`. |
@@ -1254,7 +1006,6 @@ System.out.println("Estado de hardware y red del nodo JettraDB:\n" + statusJson)
 | | `resolveRef(ref / uri / json)` | Resuelve el registro apuntado en tiempo O(1). |
 | **Backups** | `triggerBackupDetailed()` | Ejecuta backup y reporta ruta y archivo resultante. |
 
-### 10.2 Pipeline Fluent de `JettraAggregation`
 ### 11.2 Métodos de `JettraRecordMapper`
 
 | Método | Argumentos | Descripción |

@@ -788,10 +788,6 @@ public class JettraClient {
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() == 200) {
             String jsonStr = response.body();
-            JsonObject root = jsonParser.fromJson(jsonStr, JsonObject.class);
-            String compJson = (root != null && root.has("components")) ? root.getAsJsonObject("components").toString()
-                    : jsonStr;
-            return Optional.of(jsonParser.fromJson(compJson, recordClass));
             R record = JettraRecordMapper.toRecord(jsonStr, recordClass);
             return Optional.ofNullable(record);
         }
@@ -799,7 +795,8 @@ public class JettraClient {
     }
 
     /**
-     * Lists documents/records from a collection and directly converts them into typed Java Records.
+     * Lists documents/records from a collection and directly converts them into
+     * typed Java Records.
      */
     public <R extends Record> List<R> listRecords(String collection, Class<R> recordClass) throws Exception {
         List<String> rawList = listDocuments(collection);
@@ -807,18 +804,22 @@ public class JettraClient {
     }
 
     /**
-     * Queries and filters records in a collection, returning strongly-typed Java Records.
+     * Queries and filters records in a collection, returning strongly-typed Java
+     * Records.
      */
-    public <R extends Record> List<R> queryRecords(String collection, java.util.function.Predicate<R> filter, Class<R> recordClass) throws Exception {
+    public <R extends Record> List<R> queryRecords(String collection, java.util.function.Predicate<R> filter,
+            Class<R> recordClass) throws Exception {
         List<R> all = listRecords(collection, recordClass);
-        if (filter == null) return all;
+        if (filter == null)
+            return all;
         return all.stream().filter(filter).toList();
     }
 
     /**
      * Executes a typed query filter over a collection, returning Java Records.
      */
-    public <R extends Record> List<R> query(String collection, java.util.function.Predicate<R> filter, Class<R> recordClass) throws Exception {
+    public <R extends Record> List<R> query(String collection, java.util.function.Predicate<R> filter,
+            Class<R> recordClass) throws Exception {
         return queryRecords(collection, filter, recordClass);
     }
 

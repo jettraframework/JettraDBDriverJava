@@ -78,12 +78,6 @@ public class JettraRepository<T> {
 
             if (json != null && !json.isBlank()) {
                 if (entityClass.isRecord()) {
-                    JsonObject root = gson.fromJson(json, JsonObject.class);
-                    if (root != null && root.has("components")) {
-                        Object comps = root.get("components");
-                        String compJson = comps instanceof JsonObject ? comps.toString() : gson.toJson(comps);
-                        return Optional.of(gson.fromJson(compJson, entityClass));
-                    }
                     @SuppressWarnings("unchecked")
                     Class<? extends Record> recType = (Class<? extends Record>) entityClass;
                     return Optional.ofNullable((T) JettraRecordMapper.toRecord(json, recType));
@@ -117,17 +111,16 @@ public class JettraRepository<T> {
                 List<String> rawDocs = client.listDocuments(collection);
                 for (String raw : rawDocs) {
                     try {
-                        T item = gson.fromJson(raw, entityClass);
-                        if (item != null)
-                            list.add(item);
                         if (entityClass.isRecord()) {
                             @SuppressWarnings("unchecked")
                             Class<? extends Record> recType = (Class<? extends Record>) entityClass;
                             T item = (T) JettraRecordMapper.toRecord(raw, recType);
-                            if (item != null) list.add(item);
+                            if (item != null)
+                                list.add(item);
                         } else {
                             T item = gson.fromJson(raw, entityClass);
-                            if (item != null) list.add(item);
+                            if (item != null)
+                                list.add(item);
                         }
                     } catch (Exception ignored) {
                     }
@@ -140,7 +133,8 @@ public class JettraRepository<T> {
 
     public List<T> find(java.util.function.Predicate<T> filter) {
         List<T> all = findAll();
-        if (filter == null) return all;
+        if (filter == null)
+            return all;
         return all.stream().filter(filter).toList();
     }
 

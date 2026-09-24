@@ -12,50 +12,53 @@ import static io.jettra.test.core.JettraAssert.*;
 @NotRequiresRunningServer
 public class JettraRecordMapperTest {
 
-    public enum StatusEnum { ACTIVE, INACTIVE, SUSPENDED }
+    public enum StatusEnum {
+        ACTIVE, INACTIVE, SUSPENDED
+    }
 
-    public record ContactInfo(String email, String phone) {}
+    public record ContactInfo(String email, String phone) {
+    }
 
     public record CustomerRecord(
-        String id,
-        String name,
-        String city,
-        double creditLimit,
-        StatusEnum status,
-        ContactInfo contact,
-        LocalDate registrationDate
-    ) {}
+            String id,
+            String name,
+            String city,
+            double creditLimit,
+            StatusEnum status,
+            ContactInfo contact,
+            LocalDate registrationDate) {
+    }
 
     public record BranchSalesSummary(
-        String branchRef,
-        long cantidadFacturas,
-        double ventasTotales,
-        double ticketPromedio
-    ) {}
+            String branchRef,
+            long cantidadFacturas,
+            double ventasTotales,
+            double ticketPromedio) {
+    }
 
     public record ProductRecord(
-        String id,
-        String sku,
-        double unitPrice,
-        boolean active
-    ) {}
+            String id,
+            String sku,
+            double unitPrice,
+            boolean active) {
+    }
 
     @Test
     void testDirectJsonToRecord() {
         String json = """
-            {
-                "id": "cust_100",
-                "name": "Acme Global S.A.",
-                "city": "Panama City",
-                "creditLimit": 25000.50,
-                "status": "ACTIVE",
-                "contact": {
-                    "email": "info@acme.com",
-                    "phone": "+507 200-1111"
-                },
-                "registrationDate": "2026-01-15"
-            }
-            """;
+                {
+                    "id": "cust_100",
+                    "name": "Acme Global S.A.",
+                    "city": "Panama City",
+                    "creditLimit": 25000.50,
+                    "status": "ACTIVE",
+                    "contact": {
+                        "email": "info@acme.com",
+                        "phone": "+507 200-1111"
+                    },
+                    "registrationDate": "2026-01-15"
+                }
+                """;
 
         CustomerRecord rec = JettraRecordMapper.toRecord(json, CustomerRecord.class);
         assertNotNull(rec);
@@ -74,17 +77,17 @@ public class JettraRecordMapperTest {
     void testComponentsWrappedJson() {
         // JettraDB Records Engine stores payloads wrapped in components:
         String json = """
-            {
-                "_recordClass": "com.factura.model.ProductRecord",
-                "_table": "products",
-                "components": {
-                    "id": "prod_42",
-                    "sku": "SKU-000042",
-                    "unitPrice": 89.99,
-                    "active": true
+                {
+                    "_recordClass": "com.factura.model.ProductRecord",
+                    "_table": "products",
+                    "components": {
+                        "id": "prod_42",
+                        "sku": "SKU-000042",
+                        "unitPrice": 89.99,
+                        "active": true
+                    }
                 }
-            }
-            """;
+                """;
 
         ProductRecord prod = JettraRecordMapper.toRecord(json, ProductRecord.class);
         assertNotNull(prod);
@@ -97,13 +100,13 @@ public class JettraRecordMapperTest {
     @Test
     void testTolerantCaseAndSnakeCaseMapping() {
         String json = """
-            {
-                "id": "prod_1",
-                "SKU": "SKU-999",
-                "unit_price": 120.50,
-                "ACTIVE": true
-            }
-            """;
+                {
+                    "id": "prod_1",
+                    "SKU": "SKU-999",
+                    "unit_price": 120.50,
+                    "ACTIVE": true
+                }
+                """;
 
         ProductRecord prod = JettraRecordMapper.toRecord(json, ProductRecord.class);
         assertNotNull(prod);
@@ -116,10 +119,9 @@ public class JettraRecordMapperTest {
     @Test
     void testAggregationRowToRecord() {
         List<String> facturas = List.of(
-            "{\"branchRef\":\"sucursal_1\",\"totalAmount\":100.0}",
-            "{\"branchRef\":\"sucursal_1\",\"totalAmount\":300.0}",
-            "{\"branchRef\":\"sucursal_2\",\"totalAmount\":500.0}"
-        );
+                "{\"branchRef\":\"sucursal_1\",\"totalAmount\":100.0}",
+                "{\"branchRef\":\"sucursal_1\",\"totalAmount\":300.0}",
+                "{\"branchRef\":\"sucursal_2\",\"totalAmount\":500.0}");
 
         JettraAggregation agg = new JettraAggregation();
         AggregationResult result = agg.groupBy("branchRef")
@@ -151,9 +153,8 @@ public class JettraRecordMapperTest {
     @Test
     void testToRecordListFromRawJsonList() {
         List<String> rawProducts = List.of(
-            "{\"id\":\"p1\",\"sku\":\"SKU-1\",\"unitPrice\":10.0,\"active\":true}",
-            "{\"id\":\"p2\",\"sku\":\"SKU-2\",\"unitPrice\":20.0,\"active\":false}"
-        );
+                "{\"id\":\"p1\",\"sku\":\"SKU-1\",\"unitPrice\":10.0,\"active\":true}",
+                "{\"id\":\"p2\",\"sku\":\"SKU-2\",\"unitPrice\":20.0,\"active\":false}");
 
         List<ProductRecord> records = JettraRecordMapper.toRecordList(rawProducts, ProductRecord.class);
         assertEquals(2, records.size());
@@ -180,15 +181,14 @@ public class JettraRecordMapperTest {
         JettraRepository<ProductRecord> repo = client.recordRepository(ProductRecord.class, "products");
 
         List<ProductRecord> sampleList = List.of(
-            new ProductRecord("p1", "SKU-A", 15.0, true),
-            new ProductRecord("p2", "SKU-B", 55.0, true),
-            new ProductRecord("p3", "SKU-C", 95.0, false)
-        );
+                new ProductRecord("p1", "SKU-A", 15.0, true),
+                new ProductRecord("p2", "SKU-B", 55.0, true),
+                new ProductRecord("p3", "SKU-C", 95.0, false));
 
         // Filter active with price > 50
         List<ProductRecord> filtered = sampleList.stream()
-            .filter(p -> p.active() && p.unitPrice() > 50.0)
-            .toList();
+                .filter(p -> p.active() && p.unitPrice() > 50.0)
+                .toList();
 
         assertEquals(1, filtered.size());
         assertEquals("p2", filtered.get(0).id());

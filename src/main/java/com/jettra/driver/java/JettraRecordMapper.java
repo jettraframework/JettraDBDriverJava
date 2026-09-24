@@ -12,15 +12,19 @@ import java.time.LocalDate;
 import java.util.*;
 
 /**
- * High-performance, reflection-based Java 25 Record mapper for JettraDBDriverJava.
+ * High-performance, reflection-based Java 25 Record mapper for
+ * JettraDBDriverJava.
  * Supports direct transformation of JSON strings, JsonObjects, raw maps, and
  * AggregationRows into strongly-typed Java Record classes.
  *
  * Features:
  * - Tolerant field naming (camelCase, snake_case, case-insensitive)
- * - Automatic unwrapping of JettraDB `components` blocks in RECORD engine payloads
- * - Smart accumulator alias matching for AggregationRows (e.g. sum_totalAmount -> totalAmount)
- * - Automatic type coercion for primitives, Wrappers, Enums, LocalDate, Instant, BigDecimal, UUID, and nested Records
+ * - Automatic unwrapping of JettraDB `components` blocks in RECORD engine
+ * payloads
+ * - Smart accumulator alias matching for AggregationRows (e.g. sum_totalAmount
+ * -> totalAmount)
+ * - Automatic type coercion for primitives, Wrappers, Enums, LocalDate,
+ * Instant, BigDecimal, UUID, and nested Records
  */
 public final class JettraRecordMapper {
 
@@ -54,7 +58,8 @@ public final class JettraRecordMapper {
             return null;
         }
 
-        // If the object contains a "components" object (JettraDB Records Engine format), merge them
+        // If the object contains a "components" object (JettraDB Records Engine
+        // format), merge them
         Map<String, Object> sourceMap = new LinkedHashMap<>();
         if (jsonObject.has("components")) {
             Object comp = jsonObject.get("components");
@@ -74,7 +79,8 @@ public final class JettraRecordMapper {
     }
 
     /**
-     * Converts an AggregationRow into an instance of the specified Java Record class.
+     * Converts an AggregationRow into an instance of the specified Java Record
+     * class.
      */
     public static <R extends Record> R toRecord(AggregationRow row, Class<R> recordClass) {
         if (row == null || recordClass == null) {
@@ -95,14 +101,16 @@ public final class JettraRecordMapper {
     }
 
     /**
-     * Converts a Map of field names to values into an instance of the specified Java Record class.
+     * Converts a Map of field names to values into an instance of the specified
+     * Java Record class.
      */
     public static <R extends Record> R toRecord(Map<String, Object> map, Class<R> recordClass) {
         return fromMap(map, recordClass);
     }
 
     /**
-     * Converts a list of items (JSON strings, JsonObjects, Maps, or AggregationRows) into a List of Records.
+     * Converts a list of items (JSON strings, JsonObjects, Maps, or
+     * AggregationRows) into a List of Records.
      */
     public static <R extends Record> List<R> toRecordList(List<?> items, Class<R> recordClass) {
         if (items == null || items.isEmpty() || recordClass == null) {
@@ -110,7 +118,8 @@ public final class JettraRecordMapper {
         }
         List<R> list = new ArrayList<>(items.size());
         for (Object item : items) {
-            if (item == null) continue;
+            if (item == null)
+                continue;
             R rec = null;
             if (recordClass.isInstance(item)) {
                 rec = recordClass.cast(item);
@@ -163,7 +172,8 @@ public final class JettraRecordMapper {
             canonical.setAccessible(true);
             return canonical.newInstance(args);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to instantiate record " + recordClass.getName() + ": " + e.getMessage(), e);
+            throw new RuntimeException("Failed to instantiate record " + recordClass.getName() + ": " + e.getMessage(),
+                    e);
         }
     }
 
@@ -171,10 +181,12 @@ public final class JettraRecordMapper {
      * Resolves a field name in the map with fuzzy/tolerant strategies.
      */
     private static Object findValueInMap(Map<String, Object> map, String name) {
-        if (map == null || name == null) return null;
+        if (map == null || name == null)
+            return null;
 
         // 1. Exact match
-        if (map.containsKey(name)) return map.get(name);
+        if (map.containsKey(name))
+            return map.get(name);
 
         // 2. Case-insensitive match
         for (var entry : map.entrySet()) {
@@ -185,7 +197,8 @@ public final class JettraRecordMapper {
 
         // 3. Snake_case equivalent
         String snake = camelToSnake(name);
-        if (map.containsKey(snake)) return map.get(snake);
+        if (map.containsKey(snake))
+            return map.get(snake);
         for (var entry : map.entrySet()) {
             if (entry.getKey().equalsIgnoreCase(snake)) {
                 return entry.getValue();
@@ -194,15 +207,18 @@ public final class JettraRecordMapper {
 
         // 4. CamelCase equivalent (if name is snake_case)
         String camel = snakeToCamel(name);
-        if (map.containsKey(camel)) return map.get(camel);
+        if (map.containsKey(camel))
+            return map.get(camel);
 
         // 5. Common aggregation prefixes: sum_*, avg_*, min_*, max_*, count_*
-        String[] prefixes = {"sum_", "avg_", "min_", "max_", "count_"};
+        String[] prefixes = { "sum_", "avg_", "min_", "max_", "count_" };
         for (String pfx : prefixes) {
             String candidate = pfx + name;
-            if (map.containsKey(candidate)) return map.get(candidate);
+            if (map.containsKey(candidate))
+                return map.get(candidate);
             String candidateSnake = pfx + snake;
-            if (map.containsKey(candidateSnake)) return map.get(candidateSnake);
+            if (map.containsKey(candidateSnake))
+                return map.get(candidateSnake);
         }
 
         return null;
@@ -211,7 +227,7 @@ public final class JettraRecordMapper {
     /**
      * Coerces a raw object into the target component type.
      */
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings({ "rawtypes", "unchecked" })
     private static Object coerceValue(Object raw, Class<?> targetType) {
         if (raw == null) {
             return getDefaultPrimitiveValue(targetType);
@@ -231,7 +247,8 @@ public final class JettraRecordMapper {
 
         // 2. Integers
         if (targetType == int.class || targetType == Integer.class) {
-            if (raw instanceof Number n) return n.intValue();
+            if (raw instanceof Number n)
+                return n.intValue();
             try {
                 return (int) Math.round(Double.parseDouble(str));
             } catch (Exception e) {
@@ -241,7 +258,8 @@ public final class JettraRecordMapper {
 
         // 3. Longs
         if (targetType == long.class || targetType == Long.class) {
-            if (raw instanceof Number n) return n.longValue();
+            if (raw instanceof Number n)
+                return n.longValue();
             try {
                 return Math.round(Double.parseDouble(str));
             } catch (Exception e) {
@@ -251,7 +269,8 @@ public final class JettraRecordMapper {
 
         // 4. Doubles
         if (targetType == double.class || targetType == Double.class) {
-            if (raw instanceof Number n) return n.doubleValue();
+            if (raw instanceof Number n)
+                return n.doubleValue();
             try {
                 return Double.parseDouble(str);
             } catch (Exception e) {
@@ -261,7 +280,8 @@ public final class JettraRecordMapper {
 
         // 5. Floats
         if (targetType == float.class || targetType == Float.class) {
-            if (raw instanceof Number n) return n.floatValue();
+            if (raw instanceof Number n)
+                return n.floatValue();
             try {
                 return Float.parseFloat(str);
             } catch (Exception e) {
@@ -271,7 +291,8 @@ public final class JettraRecordMapper {
 
         // 6. Booleans
         if (targetType == boolean.class || targetType == Boolean.class) {
-            if (raw instanceof Boolean b) return b;
+            if (raw instanceof Boolean b)
+                return b;
             return "true".equalsIgnoreCase(str) || "1".equals(str);
         }
 
@@ -339,7 +360,8 @@ public final class JettraRecordMapper {
 
         // 13. JsonObject
         if (targetType == JsonObject.class) {
-            if (raw instanceof JsonObject jo) return jo;
+            if (raw instanceof JsonObject jo)
+                return jo;
             try {
                 return JSON_PARSER.fromJson(str, JsonObject.class);
             } catch (Exception ignored) {
@@ -350,24 +372,34 @@ public final class JettraRecordMapper {
     }
 
     private static Object getDefaultPrimitiveValue(Class<?> type) {
-        if (type == int.class) return 0;
-        if (type == long.class) return 0L;
-        if (type == double.class) return 0.0;
-        if (type == float.class) return 0.0f;
-        if (type == boolean.class) return false;
-        if (type == byte.class) return (byte) 0;
-        if (type == short.class) return (short) 0;
-        if (type == char.class) return '\0';
+        if (type == int.class)
+            return 0;
+        if (type == long.class)
+            return 0L;
+        if (type == double.class)
+            return 0.0;
+        if (type == float.class)
+            return 0.0f;
+        if (type == boolean.class)
+            return false;
+        if (type == byte.class)
+            return (byte) 0;
+        if (type == short.class)
+            return (short) 0;
+        if (type == char.class)
+            return '\0';
         return null;
     }
 
     private static String camelToSnake(String str) {
-        if (str == null) return null;
+        if (str == null)
+            return null;
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < str.length(); i++) {
             char c = str.charAt(i);
             if (Character.isUpperCase(c)) {
-                if (i > 0) sb.append('_');
+                if (i > 0)
+                    sb.append('_');
                 sb.append(Character.toLowerCase(c));
             } else {
                 sb.append(c);
@@ -377,7 +409,8 @@ public final class JettraRecordMapper {
     }
 
     private static String snakeToCamel(String str) {
-        if (str == null) return null;
+        if (str == null)
+            return null;
         StringBuilder sb = new StringBuilder();
         boolean nextUpper = false;
         for (int i = 0; i < str.length(); i++) {
@@ -396,4 +429,3 @@ public final class JettraRecordMapper {
         return sb.toString();
     }
 }
-

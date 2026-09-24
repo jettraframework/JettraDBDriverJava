@@ -84,8 +84,6 @@ public class JettraFluentQuery {
             }
             String json = get(id);
             if (json != null && !json.isBlank()) {
-                io.jettra.json.JettraJson parser = new io.jettra.json.JettraJson();
-                return Optional.ofNullable(parser.fromJson(json, recordClass));
                 return Optional.ofNullable(JettraRecordMapper.toRecord(json, recordClass));
             }
         } catch (Exception e) {
@@ -127,7 +125,8 @@ public class JettraFluentQuery {
 
     public <R extends Record> List<R> filter(java.util.function.Predicate<R> predicate, Class<R> recordClass) {
         List<R> records = list(recordClass);
-        if (predicate == null) return records;
+        if (predicate == null)
+            return records;
         return records.stream().filter(predicate).toList();
     }
 
