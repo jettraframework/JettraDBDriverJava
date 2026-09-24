@@ -1,23 +1,35 @@
 package com.jettra.driver.java;
 
+import io.jettra.json.JsonObject;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * JettraReference represents a direct, ultra-fast O(1) cross-engine pointer in Java.
- * URI Syntax: jref://[node@][ENGINE:]database/entityId
+ * JettraReference: Ultra-fast, direct O(1) cross-engine pointer in Java.
+ * Supports pointing across all 9 storage engines, distinct
+ * databases/namespaces,
+ * and remote distributed cluster nodes.
+ *
+ * URI Format:
+ * jref://[node@][ENGINE:]database/entityId
+ *
+ * Examples:
+ * jref://DOCUMENT:ExampleFactura/cust_101
+ * jref://RECORDS:ExampleFactura/comp_1
+ * jref://GEOSPATIAL:ExampleFactura/sucursal_5
+ * jref://node-01@VECTOR:ai_db/face_emb_42
+ * jref://ExampleFactura/cust_1 (defaults to DOCUMENT engine)
  */
 public record JettraReference(
-    String node,
-    String engine,
-    String database,
-    String entityId,
-    String directStorageKey
-) {
+        String node,
+        String engine,
+        String database,
+        String entityId,
+        String directStorageKey) {
 
     private static final Pattern JREF_PATTERN = Pattern.compile(
-        "^jref://(?:([a-zA-Z0-9_-]+)@)?(?:([A-Z]+):)?([a-zA-Z0-9_]+)/([a-zA-Z0-9_.:-]+)$"
-    );
+            "^(?:jref|jettra|ref)://(?:([^@/:]+)@)?(?:([a-zA-Z0-9_]+):)?([a-zA-Z0-9_.-]+)/(.+)$");
 
     public static JettraReference of(String engine, String database, String entityId) {
         return of(null, engine, database, entityId);
@@ -37,6 +49,45 @@ public record JettraReference(
             throw new IllegalArgumentException("Reference URI cannot be null or empty");
         }
         String clean = uri.trim();
+        if (clean.startsWith("\"") && clean.endsWith("\"") && clean.length() >= 2) {
+            clean = clean.substring(1, clean.length() - 1).trim();
+        }
+
+        // Handle JSON objects containing $jref or $ref
+        if (clean.startsWith("{") && clean.endsWith("}")) {
+            if (clean.contains("\"$jref\"") || clean.contains("\"$ref\"")) {
+                int start = clean.indexOf("://");
+                if (start > 0) {
+                    int prefixStart = clean.lastIndexOf("\"", start);
+                    if (prefixStart >= 0) {
+                        int end = clean.indexOf("\"", start + 3);
+                        if (end > start) {
+                            clean = clean.substring(prefixStart + 1, end).trim();
+                        }
+                    }
+                }
+            }
+        }
+
+        // Handle query parameter URI wrapper: e.g.
+        // /engines?action=resolve_ref&uri=jref%3A%2F%2F...
+        if (clean.contains("uri=")) {
+            int idx = clean.indexOf("uri=");
+            clean = clean.substring(idx + 4);
+            int amp = clean.indexOf("&");
+            if (amp > 0) {
+                clean = clean.substring(0, amp);
+            }
+            try {
+                clean = java.net.URLDecoder.decode(clean, java.nio.charset.StandardCharsets.UTF_8);
+                if (clean.contains("%")) {
+                    clean = java.net.URLDecoder.decode(clean, java.nio.charset.StandardCharsets.UTF_8);
+                }
+            } catch (Exception ignored) {
+            }
+            clean = clean.trim();
+        }
+
         Matcher m = JREF_PATTERN.matcher(clean);
         if (m.matches()) {
             String node = m.group(1);
@@ -46,10 +97,27 @@ public record JettraReference(
             return of(node, engine, db, id);
         }
 
+        // Support format "engine:db/id" or "db/id"
+        if (clean.contains("/") && !clean.contains("://")) {
+            int slash = clean.indexOf('/');
+            String head = clean.substring(0, slash);
+            String tail = clean.substring(slash + 1);
+            if (head.contains(":")) {
+                String[] hp = head.split(":", 2);
+                return of(null, hp[0], hp[1], tail);
+            } else {
+                return of(null, "DOCUMENT", head, tail);
+            }
+        }
+
+        // Support shorthand format "engine:db:id" or "db:id"
         if (clean.contains(":")) {
             String[] parts = clean.split(":");
-            if (parts.length == 3) {
-                return of(null, parts[0], parts[1], parts[2]);
+            if (parts.length >= 3) {
+                String engine = parts[0];
+                String db = parts[1];
+                String id = String.join(":", java.util.Arrays.copyOfRange(parts, 2, parts.length));
+                return of(null, engine, db, id);
             } else if (parts.length == 2) {
                 return of(null, "DOCUMENT", parts[0], parts[1]);
             }
@@ -58,7 +126,13 @@ public record JettraReference(
     }
 
     public static boolean isReference(String str) {
-        return str != null && (str.startsWith("jref://") || str.startsWith("{\"$jref\""));
+        if (str == null)
+            return false;
+        String s = str.trim();
+        return s.startsWith("jref://") || s.startsWith("jettra://") || s.startsWith("ref://")
+                || s.startsWith("{\"$jref\"") || s.startsWith("{\"$ref\"")
+                || (s.contains("\"$jref\"") && s.contains("://"))
+                || (s.contains("\"$ref\"") && s.contains("://"));
     }
 
     public static String computeDirectStorageKey(String engine, String database, String entityId) {
@@ -71,7 +145,7 @@ public record JettraReference(
             case "COLUMN" -> "col:";
             case "GEOSPATIAL" -> "geo:";
             case "OBJECT" -> "obj:";
-            default -> ""; // DOCUMENT
+            default -> "doc:"; // DOCUMENT
         };
         return pfx + database + ":" + entityId;
     }
@@ -86,6 +160,12 @@ public record JettraReference(
         }
         sb.append(database).append("/").append(entityId);
         return sb.toString();
+    }
+
+    public JsonObject toJsonObject() {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("$jref", toUri());
+        return obj;
     }
 
     @Override

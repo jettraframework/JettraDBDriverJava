@@ -1,93 +1,48 @@
-# JettraStoreDriverJava
+# JettraDBDriverJava
 
-Official Java Driver for **JettraStoreEngine** with native support for **Java 25 Records**, Typed Repositories, Fluent Queries, and all 9 Multi-Model Database Engines.
+Driver oficial para **JettraDB** (y JettraStoreEngine) desarrollado para **Java 25** con soporte para Virtual Threads, Compact Object Headers, Generational ZGC, **Java 25 Records**, Repositorios Tipados, Consultas Fluent, Referencias Cruzadas `jref://` y los **9 Motores Multi-Modelo**.
 
-## Installation (Maven)
+## Instalación (Maven)
 
 ```xml
-<dependency>
-    <groupId>com.jettra</groupId>
-    <artifactId>JettraStoreDriverJava</artifactId>
-    <version>1.0-SNAPSHOT</version>
-</dependency>
+<dependencies>
+    <dependency>
+        <groupId>com.jettra</groupId>
+        <artifactId>JettraDBDriverJava</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </dependency>
+</dependencies>
+
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
 ```
 
-## Quickstart with Java 25 Records & Rich Data Types
+## Características Principales
 
-JettraStoreDriverJava natively supports:
-- **Temporal types**: `Date`, `LocalDate`, `LocalTime`, `LocalDateTime`, `Instant`, `ZonedDateTime`, `OffsetDateTime`
-- **Primitives**: `byte`, `short`, `int`, `long`, `float`, `double`, `boolean`, `char` (and wrappers)
-- **Collections**: `List<>`, `Array<>`, `Set<>`, `Collection<>`
-- **Enumerations**: `Enum<>`
-- **Nested Objects & Records**: Deep record graphs (e.g. `Persona` -> `Pais`)
+- **Gestión de Bases de Datos**: `listDatabases()`, `databaseExists()`, `createDatabase()`, `dropDatabase()`.
+- **9 Motores Multi-Modelo Nativos**:
+  - `RECORDS`: Serialización automática de Records Java 25 y proyección selectiva de campos (`?fields=...`).
+  - `DOCUMENT`: CRUD NoSQL, secuencias e ID UUID, historial MVCC y restauración PITR.
+  - `KEYVALUE`: Almacén atómico clave-valor en MemTable.
+  - `VECTOR`: Embeddings IA y similitud coseno.
+  - `GRAPH`: Grafo de propiedades con nodos y aristas.
+  - `TIMESERIES`: Métricas y telemetría temporal.
+  - `COLUMN`: Almacén columnar OLAP.
+  - `GEOSPATIAL`: Puntos GPS y distancias Haversine.
+  - `OBJECT`: BLOBs binarios y flujos serializados.
+- **Referencias Cruzadas O(1) (`JettraReference`)**: Conexión directa entre motores mediante punteros `jref://[ENGINE:]db/id`.
+- **Conversión Directa a Java 25 Records (`JettraRecordMapper`)**: Soporte directo en consultas (`client.query()`, `client.listRecords()`, `fluent.filter()`, `repo.find()`, `agg.toRecordList()`) con coerción automática de tipos, tolerancia a `camelCase`/`snake_case` y desempaquetado de bloques `components`.
+- **Motores de Consultas Integrados**: Soporte y documentación para consultas declarativas **JQL (SQL)**, canalizaciones funcionales **Stream Pipeline**, analítica **JettraAggregation** y motores especializados (`VECTOR`, `GEOSPATIAL`, `TIMESERIES`, `GRAPH`, `COLUMN`, `DOCUMENT`, `RECORDS`).
+- **Motor de Agregaciones y Agrupaciones (`JettraAggregation`)**: Pipeline analítico en memoria con `groupBy` (admite dot-notation), `count`, `sum`, `avg`, `min`, `max`, filtros `filter` (WHERE) y `having`, ordenamiento, paginación y resolución automática de referencias (`lookup`).
+- **API Fluent (`JettraFluentQuery`)** y **Patrón Repositorio Tipado (`JettraRepository<T>`)**.
+- **Autenticación y Sesiones**: Login JWT Bearer, cambio de clave y logout.
+- **Caso de Estudio Completo**: Demostración con la base de datos empresarial **`ExampleFactura`**.
 
-```java
-import com.jettra.driver.java.JettraClient;
-import com.jettra.driver.java.JettraRepository;
-import java.time.LocalDate;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
+## Documentación Completa y Ejemplos
 
-// 1. Define Enums and Nested Java 25 Records
-public enum EstadoCivil { SOLTERO, CASADO, DIVORCIADO }
-public record Pais(String codigo, String nombre) {}
-public record Persona(
-    String id,
-    String nombre,
-    Pais pais,
-    LocalDate fechaNacimiento,
-    Instant creadoEn,
-    List<String> tags,
-    EstadoCivil estadoCivil
-) {}
-
-public class App {
-    public static void main(String[] args) throws Exception {
-        // 2. Connect and authenticate
-        JettraClient client = new JettraClient("localhost", 8086);
-        client.connect();
-        client.login("admin", "admin");
-
-        // 3. Direct Reflection saveRecord (automatically extracts schema & nested components)
-        Persona p = new Persona(
-            "PER-001",
-            "Aristides",
-            new Pais("PA", "Panamá"),
-            LocalDate.of(1980, 5, 20),
-            Instant.now(),
-            List.of("java", "databases", "cloud"),
-            EstadoCivil.CASADO
-        );
-        client.saveRecord("personas", p.id(), p);
-
-        // 4. Retrieve typed Record
-        Optional<Persona> loaded = client.getRecord("personas", "PER-001", Persona.class);
-        loaded.ifPresent(pers -> System.out.println("Loaded: " + pers.nombre() + " from " + pers.pais().nombre()));
-
-        // 5. Typed Record Repository Pattern
-        JettraRepository<Persona> repo = client.recordRepository(Persona.class, "personas");
-        Optional<Persona> found = repo.findById("PER-001");
-
-        // 6. Fluent Records Query API
-        client.records().collection("personas").insert("PER-002", 
-            "{\"_recordClass\":\"Persona\",\"components\":{\"nombre\":\"Bob\",\"fechaNacimiento\":\"1992-08-14\"}}");
-
-        client.close();
-    }
-}
-```
-
-## Multi-Model Engines Overview
-
-| Engine | Fluent Method | Example |
-| :--- | :--- | :--- |
-| **`RECORDS`** | `client.records()` / `client.recordRepository(...)` | `repo.save("id", new MyRecord(...))` |
-| **`DOCUMENT`** | `client.document()` | `client.document().collection("c").insert("id", json)` |
-| **`VECTOR`** | `client.vector()` | `client.vector().collection("c").insert("id", json)` |
-| **`GRAPH`** | `client.graph()` | `client.graph().collection("c").insert("id", json)` |
-| **`TIMESERIES`**| `client.timeseries()` | `client.timeseries().collection("c").insert("ts", json)` |
-| **`COLUMN`** | `client.column()` | `client.column().collection("c").insert("id", json)` |
-| **`KEYVALUE`** | `client.keyvalue()` | `client.keyvalue().collection("c").insert("k", val)` |
-| **`GEOSPATIAL`**| `client.geospatial()` | `client.geospatial().collection("c").insert("id", json)` |
-| **`OBJECT`** | `client.object()` | `client.object().collection("c").insert("id", json)` |
+Consulte el manual completo con ejemplos de código para todas las operaciones y el caso de estudio de `ExampleFactura` en:
+👉 **[Guía Completa y Manual de Arquitectura (guide/book.md)](guide/book.md)**
